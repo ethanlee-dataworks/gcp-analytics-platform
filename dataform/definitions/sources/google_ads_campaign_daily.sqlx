@@ -1,0 +1,6 @@
+config {
+  type: "declaration",
+  schema: "raw_google_ads",
+  name: "campaign_daily",
+  description: "Synthetic Google Ads report, one row per day x campaign, loaded by scripts/load_ad_spend.sh."
+}

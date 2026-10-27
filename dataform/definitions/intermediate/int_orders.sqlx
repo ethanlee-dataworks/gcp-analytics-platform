@@ -1,0 +1,31 @@
+config {
+  type: "table",
+  schema: "intermediate",
+  description: "One row per order. Duplicated purchase events are collapsed by transaction ID; purchases without an ID each count as an order (docs/exploration.md section 5).",
+  bigquery: {
+    partitionBy: "order_date"
+  },
+  assertions: {
+    uniqueKey: ["order_key"],
+    nonNull: ["order_key", "session_key", "revenue_usd"]
+  },
+  columns: {
+    order_key: "transaction_id, or session_key + event time for purchases without one.",
+    has_transaction_id: "False for the ~16% of purchases tagged without an ID. These cannot be deduplicated.",
+    revenue_usd: "Revenue of the first event recorded for the transaction."
+  }
+}
+
+SELECT
+  COALESCE(transaction_id, CONCAT(session_key, '.', CAST(UNIX_MICROS(event_timestamp) AS STRING))) AS order_key,
+  transaction_id,
+  transaction_id IS NOT NULL AS has_transaction_id,
+  session_key,
+  user_pseudo_id,
+  event_date AS order_date,
+  event_timestamp AS ordered_at,
+  purchase_revenue_usd AS revenue_usd
+FROM ${ref("stg_ga4_events")}
+WHERE event_name = 'purchase'
+QUALIFY transaction_id IS NULL
+  OR ROW_NUMBER() OVER (PARTITION BY transaction_id ORDER BY event_timestamp) = 1

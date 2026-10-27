@@ -1,0 +1,23 @@
+config {
+  type: "view",
+  schema: "staging",
+  description: "Google Ads daily campaign report with platform-reported numbers named as such, plus the GA4 join key.",
+  columns: {
+    platform_conversions: "Conversions as Google Ads counts them (30-day click window, cross-device). Not comparable 1:1 with GA4 orders.",
+    source: "Always 'google'. With medium, the key GA4 uses for these ad clicks.",
+    medium: "Always 'cpc'."
+  }
+}
+
+SELECT
+  date,
+  campaign_id,
+  campaign_name,
+  'google' AS source,
+  'cpc' AS medium,
+  impressions,
+  clicks,
+  cost AS cost_usd,
+  conversions AS platform_conversions,
+  conversion_value AS platform_conversion_value_usd
+FROM ${ref("campaign_daily")}

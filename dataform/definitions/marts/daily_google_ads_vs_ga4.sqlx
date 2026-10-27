@@ -1,0 +1,53 @@
+config {
+  type: "table",
+  description: "Google Ads as the platform reports it next to Paid Search as GA4 sees it, per day. For Looker Studio.",
+  bigquery: {
+    partitionBy: "date"
+  },
+  assertions: {
+    uniqueKey: ["date"],
+    nonNull: ["date", "cost_usd"]
+  },
+  columns: {
+    platform_conversion_value_usd: "Revenue Google Ads credits to itself (30-day click window, cross-device).",
+    ga4_revenue_usd: "Revenue of GA4 Paid Search sessions, after the self-referral correction.",
+    ga4_revenue_usd_before_correction: "Same, using the session's own source / medium only."
+  }
+}
+
+-- Joined per day, not per campaign: GA4 campaign names are obfuscated to '<Other>' in the sample.
+-- GA4 side uses the Paid Search channel (google / cpc), so sessions that inherited
+-- Paid Search through the self-referral correction count too.
+WITH ads AS (
+  SELECT
+    date,
+    SUM(impressions) AS impressions,
+    SUM(clicks) AS clicks,
+    SUM(cost_usd) AS cost_usd,
+    SUM(platform_conversions) AS platform_conversions,
+    SUM(platform_conversion_value_usd) AS platform_conversion_value_usd
+  FROM ${ref("stg_google_ads_campaign_daily")}
+  GROUP BY date
+),
+
+ga4 AS (
+  SELECT
+    session_date AS date,
+    COUNTIF(channel = 'Paid Search') AS ga4_sessions,
+    SUM(IF(channel = 'Paid Search', orders, 0)) AS ga4_orders,
+    SUM(IF(channel = 'Paid Search', revenue_usd, 0)) AS ga4_revenue_usd,
+    SUM(IF(original_channel = 'Paid Search', revenue_usd, 0)) AS ga4_revenue_usd_before_correction
+  FROM ${ref("int_sessions")}
+  WHERE channel = 'Paid Search' OR original_channel = 'Paid Search'
+  GROUP BY date
+)
+
+SELECT
+  date,
+  ads.* EXCEPT (date),
+  IFNULL(ga4.ga4_sessions, 0) AS ga4_sessions,
+  IFNULL(ga4.ga4_orders, 0) AS ga4_orders,
+  IFNULL(ga4.ga4_revenue_usd, 0) AS ga4_revenue_usd,
+  IFNULL(ga4.ga4_revenue_usd_before_correction, 0) AS ga4_revenue_usd_before_correction
+FROM ads
+LEFT JOIN ga4 USING (date)

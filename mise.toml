@@ -1,0 +1,19 @@
+[tools]
+python = "3.12"
+node = "24"
+"npm:@dataform/cli" = "3.1.2"
+
+[settings]
+python.uv_venv_auto = "create|source"
+
+[tasks.setup]
+description = "Install tools, sync .venv, point gcloud + ADC at GCP_PROJECT_ID, write Dataform credentials"
+run = '''
+set -eu
+mise install
+uv sync
+set -a; . ./.env; set +a
+gcloud config set project "$GCP_PROJECT_ID"
+gcloud auth application-default set-quota-project "$GCP_PROJECT_ID"
+printf '{"projectId": "%s", "location": "%s"}\n' "$GCP_PROJECT_ID" "$BQ_LOCATION" > dataform/.df-credentials.json
+'''

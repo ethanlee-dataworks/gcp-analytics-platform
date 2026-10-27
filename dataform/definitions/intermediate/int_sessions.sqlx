@@ -1,0 +1,77 @@
+config {
+  type: "table",
+  schema: "intermediate",
+  description: "One row per GA4 session with its traffic source, channel (self-referral corrected), orders and revenue.",
+  bigquery: {
+    partitionBy: "session_date",
+    clusterBy: ["channel"]
+  },
+  assertions: {
+    uniqueKey: ["session_key"],
+    nonNull: ["session_key", "session_date", "channel"]
+  },
+  columns: {
+    session_date: "GA4 event_date of the session's first event (property time zone, as in GA4 reports).",
+    source: "First non-null source in the session. session_start never carries one.",
+    original_channel: "Channel from the session's own source / medium, before correction.",
+    is_self_referral: "The session was 'referred' by the store's own domain.",
+    channel: "original_channel, except self-referral sessions take the user's previous non-self-referral channel, or Direct."
+  }
+}
+
+WITH sessions AS (
+  SELECT
+    session_key,
+    ANY_VALUE(user_pseudo_id) AS user_pseudo_id,
+    MIN(event_date) AS session_date,
+    MIN(event_timestamp) AS session_start_at,
+    COUNT(*) AS events,
+    ARRAY_AGG(source IGNORE NULLS ORDER BY event_timestamp LIMIT 1)[SAFE_OFFSET(0)] AS source,
+    ARRAY_AGG(medium IGNORE NULLS ORDER BY event_timestamp LIMIT 1)[SAFE_OFFSET(0)] AS medium,
+    ARRAY_AGG(campaign IGNORE NULLS ORDER BY event_timestamp LIMIT 1)[SAFE_OFFSET(0)] AS campaign,
+    ARRAY_AGG(device_category IGNORE NULLS ORDER BY event_timestamp LIMIT 1)[SAFE_OFFSET(0)] AS device_category,
+    ARRAY_AGG(country IGNORE NULLS ORDER BY event_timestamp LIMIT 1)[SAFE_OFFSET(0)] AS country
+  FROM ${ref("stg_ga4_events")}
+  GROUP BY session_key
+),
+
+classified AS (
+  SELECT
+    *,
+    ${ga4.channelGroup("source", "medium")} AS original_channel
+  FROM sessions
+),
+
+-- Self-referral sessions take the channel of the same user's latest earlier session
+-- that was not a self-referral. No such session: Direct.
+corrected AS (
+  SELECT
+    *,
+    original_channel = 'Self-referral' AS is_self_referral,
+    IF(
+      original_channel = 'Self-referral',
+      COALESCE(
+        LAST_VALUE(NULLIF(original_channel, 'Self-referral') IGNORE NULLS) OVER (
+          PARTITION BY user_pseudo_id
+          ORDER BY session_start_at
+          ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+        ),
+        'Direct'
+      ),
+      original_channel
+    ) AS channel
+  FROM classified
+),
+
+session_orders AS (
+  SELECT session_key, COUNT(*) AS orders, SUM(revenue_usd) AS revenue_usd
+  FROM ${ref("int_orders")}
+  GROUP BY session_key
+)
+
+SELECT
+  c.*,
+  IFNULL(o.orders, 0) AS orders,
+  IFNULL(o.revenue_usd, 0) AS revenue_usd
+FROM corrected AS c
+LEFT JOIN session_orders AS o USING (session_key)

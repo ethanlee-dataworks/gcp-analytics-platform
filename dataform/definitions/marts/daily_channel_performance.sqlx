@@ -1,0 +1,41 @@
+config {
+  type: "table",
+  description: "Sessions, orders and revenue per day and channel, after and before the self-referral correction. For Looker Studio.",
+  bigquery: {
+    partitionBy: "date"
+  },
+  assertions: {
+    uniqueKey: ["date", "channel"],
+    nonNull: ["date", "channel"]
+  },
+  columns: {
+    channel: "Corrected channel. 'Self-referral' appears only in the *_before_correction columns.",
+    revenue_usd_before_correction: "Revenue by the session's own source / medium, before self-referral sessions inherit a channel."
+  }
+}
+
+-- Only counts and sums here. Ratios (conversion rate, AOV) are computed in Looker Studio
+-- from the sums, because averaging daily ratios gives the wrong answer.
+WITH corrected AS (
+  SELECT session_date AS date, channel, COUNT(*) AS sessions, SUM(orders) AS orders, SUM(revenue_usd) AS revenue_usd
+  FROM ${ref("int_sessions")}
+  GROUP BY 1, 2
+),
+
+original AS (
+  SELECT session_date AS date, original_channel AS channel, COUNT(*) AS sessions, SUM(orders) AS orders, SUM(revenue_usd) AS revenue_usd
+  FROM ${ref("int_sessions")}
+  GROUP BY 1, 2
+)
+
+SELECT
+  date,
+  channel,
+  IFNULL(c.sessions, 0) AS sessions,
+  IFNULL(c.orders, 0) AS orders,
+  IFNULL(c.revenue_usd, 0) AS revenue_usd,
+  IFNULL(o.sessions, 0) AS sessions_before_correction,
+  IFNULL(o.orders, 0) AS orders_before_correction,
+  IFNULL(o.revenue_usd, 0) AS revenue_usd_before_correction
+FROM corrected AS c
+FULL OUTER JOIN original AS o USING (date, channel)

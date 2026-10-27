@@ -1,0 +1,7 @@
+config {
+  type: "declaration",
+  database: "bigquery-public-data",
+  schema: "ga4_obfuscated_sample_ecommerce",
+  name: "events_*",
+  description: "GA4 export of the Google Merchandise Store, one table per day (2020-11-01 to 2021-01-31)."
+}

@@ -1,0 +1,44 @@
+config {
+  type: "incremental",
+  schema: "staging",
+  description: "One row per GA4 event with the keys the models need pulled out of event_params.",
+  bigquery: {
+    partitionBy: "event_date",
+    clusterBy: ["event_name"]
+  },
+  columns: {
+    session_key: "user_pseudo_id + ga_session_id. ga_session_id alone is not unique across users.",
+    source: "Event-level source. Only some events carry it; int_sessions picks the session value.",
+    transaction_id: "ecommerce.transaction_id with '(not set)' turned into NULL.",
+    purchase_revenue_usd: "ecommerce.purchase_revenue_in_usd. Same total as the 'value' param, without mixed types."
+  }
+}
+
+pre_operations {
+  -- GA4 can rewrite a daily table for up to 72 hours after the day ends,
+  -- so each incremental run reloads the last 3 days it already has.
+  DECLARE start_date DATE DEFAULT (
+    ${when(incremental(),
+      `SELECT COALESCE(DATE_SUB(MAX(event_date), INTERVAL 3 DAY), DATE '2020-11-01') FROM ${self()}`,
+      `SELECT DATE '2020-11-01'`)}
+  );
+  ${when(incremental(), `DELETE FROM ${self()} WHERE event_date >= start_date;`)}
+}
+
+SELECT
+  PARSE_DATE('%Y%m%d', event_date) AS event_date,
+  TIMESTAMP_MICROS(event_timestamp) AS event_timestamp,
+  event_name,
+  user_pseudo_id,
+  ${ga4.eventParam("ga_session_id", "int")} AS ga_session_id,
+  ${ga4.eventParam("ga_session_number", "int")} AS ga_session_number,
+  CONCAT(user_pseudo_id, '.', CAST(${ga4.eventParam("ga_session_id", "int")} AS STRING)) AS session_key,
+  ${ga4.eventParam("source")} AS source,
+  ${ga4.eventParam("medium")} AS medium,
+  ${ga4.eventParam("campaign")} AS campaign,
+  NULLIF(ecommerce.transaction_id, '(not set)') AS transaction_id,
+  ecommerce.purchase_revenue_in_usd AS purchase_revenue_usd,
+  device.category AS device_category,
+  geo.country AS country
+FROM ${ref("events_*")}
+WHERE _TABLE_SUFFIX >= FORMAT_DATE('%Y%m%d', start_date)

@@ -1,0 +1,17 @@
+# Env secrets
+.env
+.env.*
+!.env.example
+
+# Dataform
+.df-credentials.json
+node_modules/
+
+# Generated data
+data/
+
+# IDE
+.vscode/
+
+# Local agent notes
+CLAUDE.md
