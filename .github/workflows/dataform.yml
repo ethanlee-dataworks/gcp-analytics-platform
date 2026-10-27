@@ -1,0 +1,61 @@
+# Build the Dataform project on BigQuery.
+#   pull_request: full build into *_ci datasets (staging_ci, marts_ci, ...) with assertions,
+#                 so new models are tested for real without touching production tables.
+#   push to main: build production datasets.
+#   schedule:     daily build, as it would run for a live GA4 property.
+# Auth is Workload Identity Federation (scripts/setup_wif.sh); there is no key file.
+name: dataform
+
+on:
+  pull_request:
+    branches: [main]
+    paths: ["dataform/**", ".github/workflows/dataform.yml"]
+  push:
+    branches: [main]
+    paths: ["dataform/**", ".github/workflows/dataform.yml"]
+  schedule:
+    - cron: "0 20 * * *" # 07:00 Sydney (AEDT)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # lets the job request a GitHub OIDC token for WIF
+
+concurrency:
+  group: dataform-${{ github.event_name == 'pull_request' && 'ci' || 'prod' }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dataform
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.WIF_SERVICE_ACCOUNT }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install Dataform CLI
+        run: npm install -g @dataform/cli@3.1.2
+
+      - name: Write Dataform credentials (ADC, no key)
+        run: echo '{"projectId": "${{ vars.GCP_PROJECT_ID }}", "location": "US"}' > .df-credentials.json
+
+      - name: Compile
+        run: dataform compile .
+
+      - name: Build into *_ci datasets
+        if: github.event_name == 'pull_request'
+        run: dataform run . --schema-suffix=ci --full-refresh
+
+      - name: Build production
+        if: github.event_name != 'pull_request'
+        run: dataform run .
