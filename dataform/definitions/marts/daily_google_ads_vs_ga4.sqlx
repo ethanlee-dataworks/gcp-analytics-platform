@@ -10,6 +10,8 @@ config {
   },
   columns: {
     platform_conversion_value_usd: "Revenue Google Ads credits to itself (30-day click window, cross-device).",
+    ga4_sessions: "GA4 Paid Search sessions. Compare with clicks: not every click becomes a tracked session.",
+    ga4_orders: "Orders from GA4 Paid Search sessions, deduplicated by transaction ID.",
     ga4_revenue_usd: "Revenue of GA4 Paid Search sessions, after the self-referral correction.",
     ga4_revenue_usd_before_correction: "Same, using the session's own source / medium only."
   }
