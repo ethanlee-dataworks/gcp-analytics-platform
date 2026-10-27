@@ -46,7 +46,7 @@ SELECT
   date,
   ads.* EXCEPT (date),
   IFNULL(ga4.ga4_sessions, 0) AS ga4_sessions,
-  IFNULL(ga4.ga4_order, 0) AS ga4_orders,
+  IFNULL(ga4.ga4_orders, 0) AS ga4_orders,
   IFNULL(ga4.ga4_revenue_usd, 0) AS ga4_revenue_usd,
   IFNULL(ga4.ga4_revenue_usd_before_correction, 0) AS ga4_revenue_usd_before_correction
 FROM ads
