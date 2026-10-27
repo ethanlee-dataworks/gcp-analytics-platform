@@ -3,16 +3,17 @@
 #                 so new models are tested for real without touching production tables.
 #   push to main: build production datasets.
 #   schedule:     daily build, as it would run for a live GA4 property.
+# The Dataform project sits at the repo root, as the GCP Dataform console requires.
 # Auth is Workload Identity Federation (scripts/setup_wif.sh); there is no key file.
 name: dataform
 
 on:
   pull_request:
     branches: [main]
-    paths: ["dataform/**", ".github/workflows/dataform.yml"]
+    paths: ["definitions/**", "includes/**", "workflow_settings.yaml", ".github/workflows/dataform.yml"]
   push:
     branches: [main]
-    paths: ["dataform/**", ".github/workflows/dataform.yml"]
+    paths: ["definitions/**", "includes/**", "workflow_settings.yaml", ".github/workflows/dataform.yml"]
   schedule:
     - cron: "0 20 * * *" # 07:00 Sydney (AEDT)
   workflow_dispatch:
@@ -28,9 +29,6 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: dataform
     steps:
       - uses: actions/checkout@v4
 

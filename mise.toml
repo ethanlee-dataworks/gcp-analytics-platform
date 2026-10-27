@@ -15,5 +15,5 @@ uv sync
 set -a; . ./.env; set +a
 gcloud config set project "$GCP_PROJECT_ID"
 gcloud auth application-default set-quota-project "$GCP_PROJECT_ID"
-printf '{"projectId": "%s", "location": "%s"}\n' "$GCP_PROJECT_ID" "$BQ_LOCATION" > dataform/.df-credentials.json
+printf '{"projectId": "%s", "location": "%s"}\n' "$GCP_PROJECT_ID" "$BQ_LOCATION" > .df-credentials.json
 '''
