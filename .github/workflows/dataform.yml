@@ -47,7 +47,10 @@ jobs:
         run: npm install -g @dataform/cli@3.1.2
 
       - name: Write Dataform credentials (ADC, no key)
-        run: echo '{"projectId": "${{ vars.GCP_PROJECT_ID }}", "location": "US"}' > .df-credentials.json
+        env:
+          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+        run: |
+          printf '{"projectId": "%s", "location": "US"}\n' "$GCP_PROJECT_ID" > .df-credentials.json
 
       - name: Compile
         run: dataform compile .
